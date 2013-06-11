@@ -1,9 +1,16 @@
 import ch.ntb.usb.Device;
 import ch.ntb.usb.USB;
+import ch.ntb.usb.USBException;
 import ch.ntb.usb.USBTimeoutException;
 import java.awt.Robot;
 import java.awt.event.KeyEvent;
+import java.io.FileInputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 public class Main
 {
@@ -17,10 +24,30 @@ public class Main
     private static final boolean DEBUG_SWITCHES_DISABLE_SHORTCUTS = false;
     private static final boolean DEBUG_RADIO_DISABLE_SHORTCUTS = false;
     
+    static Properties properties = new Properties();
+    static Map<String, Shortcut> shortcuts = new HashMap<>();
+    static Robot robot;
+    
     public static void main(String[] args) throws Exception
     {
+        robot = new Robot();
+         
         System.out.println("CLOSING THIS WINDOW WILL CLOSE THE PROGRAM");
-        System.out.println("starting...");
+        System.out.println("Starting...");
+        
+        String name = args.length > 0 ? args[0] : "keys.properties";
+        try (FileInputStream in = new FileInputStream(name))
+        {
+            properties.load(in);
+            for (Object o: properties.keySet())
+            {
+                String key = o.toString().trim();
+                shortcuts.put(key, new Shortcut(properties.getProperty(key)));
+            }
+        }
+        System.out.println("Shortcuts read ("+shortcuts.size()+").");
+        System.out.println();
+        
         switchReader.start();
         radioReader.start();
     }
@@ -48,36 +75,127 @@ public class Main
         return (v & mask) > 0;
     }
     
+    static final Object SHORTCUT_LOCK = new Object();
+    static void applyShortcut(String property, boolean value)
+    {
+        String key = property + (value ? ".ON" : ".OFF");
+        if (shortcuts.containsKey(key))
+        {
+            Shortcut shortcut = shortcuts.get(key);
+            synchronized(SHORTCUT_LOCK)
+            {
+                try
+                {
+                    for (int i = 0; i < shortcut.modifiers.length; i++)
+                        robot.keyPress(shortcut.modifiers[i]);
+                    robot.keyPress(shortcut.keycode);
+                    Thread.sleep(300);
+                    robot.keyRelease(shortcut.keycode);
+                    for (int i = shortcut.modifiers.length-1; i >= 0; i--)
+                        robot.keyRelease(shortcut.modifiers[i]);
+                }
+                catch (InterruptedException e)
+                {
+                }
+            }
+        }
+    }
+    
+    /**
+     * Shortcut property parser
+     */
+    static class Shortcut
+    {
+        public Integer[] modifiers;
+        public int keycode;
+
+        public Shortcut(String propSyntax)
+        {
+            List<Integer> mods = new ArrayList<>();
+            int code = 0;
+            String[] tokens = propSyntax.split("\\+");
+            for (String t: tokens)
+            {
+                t = t.trim();
+                switch (t)
+                {
+                    case "ALTGR":
+                        mods.add(KeyEvent.VK_ALT_GRAPH);
+                        break;
+                    case "ALT":
+                        mods.add(KeyEvent.VK_ALT);
+                        break;
+                    case "CTRL":
+                        mods.add(KeyEvent.VK_CONTROL);
+                        break;
+                    case "SHIFT":
+                        mods.add(KeyEvent.VK_SHIFT);
+                        break;
+                    default:
+                        code = t.toUpperCase().charAt(0);
+                        break;
+                }
+            }
+            
+            keycode = code;
+            modifiers = mods.toArray(new Integer[mods.size()]);
+        }
+    }
+    
     // -------------------------------------------------------------------------
     // SWITCH PART
     
-    // Group 1
-    public static final int SWITCHKEY_MASTER_BAT = 0b1;
-    public static final int SWITCHKEY_MASTER_ALT = 0b10;
-    public static final int SWITCHKEY_AVIONICS_MASTER = 0b100;
-    public static final int SWITCHKEY_FUEL_PUMP = 0b1000;
-    public static final int SWITCHKEY_DE_ICE = 0b10000;
-    public static final int SWITCHKEY_PITOT_HEAT = 0b100000;
-    public static final int SWITCHKEY_CLOSE_COWL = 0b1000000;
-    public static final int SWITCHKEY_LIGHTS_PANEL = 0b10000000;
-    // Group 2
-    public static final int SWITCHKEY_LIGHTS_BEACON = 0b1;
-    public static final int SWITCHKEY_LIGHTS_NAV = 0b10;
-    public static final int SWITCHKEY_LIGHTS_STROBE = 0b100;
-    public static final int SWITCHKEY_LIGHTS_TAXI = 0b1000;
-    public static final int SWITCHKEY_LIGHTS_LANDING = 0b10000;
-    public static final int SWITCHKEY_ENGINE_OFF = 0b100000;
-    public static final int SWITCHKEY_ENGINE_RIGHT = 0b1000000;
-    public static final int SWITCHKEY_ENGINE_LEFT = 0b10000000;
-    // Group 3
-    public static final int SWITCHKEY_ENGINE_BOTH = 0b1;
-    public static final int SWITCHKEY_ENGINE_START = 0b10;
-    public static final int SWITCHKEY_GEAR_UP = 0b100;
-    public static final int SWITCHKEY_GEAR_DOWN = 0b1000;
-
-    interface SwitchCallback
+    enum SwitchKeys
     {
-        void changed(boolean value);
+        // Group 0
+        MASTER_BAT(0, 0b1, "SWITCHKEY_MASTER_BAT"),
+        MASTER_ALT(0, 0b10, "SWITCHKEY_MASTER_ALT"),
+        AVIONICS_MASTER(0, 0b100, "SWITCHKEY_AVIONICS_MASTER"),
+        FUEL_PUMP(0, 0b1000, "SWITCHKEY_FUEL_PUMP"),
+        DE_ICE(0, 0b10000, "SWITCHKEY_DE_ICE"),
+        PITOT_HEAT(0, 0b100000, "SWITCHKEY_PITOT_HEAT"),
+        CLOSE_COWL(0, 0b1000000, "SWITCHKEY_CLOSE_COWL"),
+        LIGHTS_PANEL(0, 0b10000000, "SWITCHKEY_CLOSE_COWL"),
+        // Group 1
+        LIGHTS_BEACON(1, 0b1, "SWITCHKEY_LIGHTS_BEACON"),
+        LIGHTS_NAV(1, 0b10, "SWITCHKEY_LIGHTS_NAV"),
+        LIGHTS_STROBE(1, 0b100, "SWITCHKEY_LIGHTS_STROBE"),
+        LIGHTS_TAXI(1, 0b1000, "SWITCHKEY_LIGHTS_TAXI"),
+        LIGHTS_LANDING(1, 0b10000, "SWITCHKEY_LIGHTS_LANDING"),
+        ENGINE_OFF(1, 0b100000, "SWITCHKEY_ENGINE_OFF"),
+        ENGINE_RIGHT(1, 0b1000000, "SWITCHKEY_ENGINE_RIGHT"),
+        ENGINE_LEFT(1, 0b10000000, "SWITCHKEY_ENGINE_LEFT"),
+        // Group 2
+        ENGINE_BOTH(2, 0b1, "SWITCHKEY_ENGINE_BOTH"),
+        ENGINE_START(2, 0b10, "SWITCHKEY_ENGINE_START"),
+        GEAR_UP(2, 0b100, "SWITCHKEY_GEAR_UP"),
+        GEAR_DOWN(2, 0b1000, "SWITCHKEY_GEAR_DOWN");
+        
+        private int group;
+        private int mask;
+        private String property;
+        
+        SwitchKeys(int group, int mask, String property)
+        {
+            this.group = group;
+            this.mask = mask;
+            this.property = property;
+        }
+        
+        public int getMask()
+        {
+            return mask;
+        }
+        
+        public int getGroup()
+        {
+            return group;
+        }
+        
+        public String getProperty()
+        {
+            return property;
+        }
     }
     
     public static void dataChangedSwitches(byte[] oldData, byte[] newData)
@@ -85,50 +203,19 @@ public class Main
         if (oldData == null || newData == null || oldData.length != newData.length || Arrays.equals(oldData, newData))
             return;
 
-        checkSwitch(oldData[0], newData[0], SWITCHKEY_MASTER_BAT, "MASTER BAT", masterARM);
-        checkSwitch(oldData[0], newData[0], SWITCHKEY_MASTER_ALT, "MASTER ALT", masterLASE);
-        checkSwitch(oldData[0], newData[0], SWITCHKEY_AVIONICS_MASTER, "AVIONICS MASTER", gunARM);
-        checkSwitch(oldData[0], newData[0], SWITCHKEY_FUEL_PUMP, "FUEL PUMP", toggleTGP);
-        checkSwitch(oldData[0], newData[0], SWITCHKEY_DE_ICE, "DE-ICE", null);
-        checkSwitch(oldData[0], newData[0], SWITCHKEY_PITOT_HEAT, "PITOT HEAT", null);
-        checkSwitch(oldData[0], newData[0], SWITCHKEY_CLOSE_COWL, "CLOSE/COWL", null, "CLOSE", "COWL");
-        checkSwitch(oldData[0], newData[0], SWITCHKEY_LIGHTS_PANEL, "LIGHTS PANEL", null);
-
-        checkSwitch(oldData[1], newData[1], SWITCHKEY_LIGHTS_BEACON, "LIGHTS BEACON", null);
-        checkSwitch(oldData[1], newData[1], SWITCHKEY_LIGHTS_NAV, "LIGHTS NAV", lightsSwitch);
-        checkSwitch(oldData[1], newData[1], SWITCHKEY_LIGHTS_STROBE, "LIGHTS STROBE", anticollisionLights);
-        checkSwitch(oldData[1], newData[1], SWITCHKEY_LIGHTS_TAXI, "LIGHTS TAXI", taxiLights);
-        checkSwitch(oldData[1], newData[1], SWITCHKEY_LIGHTS_LANDING, "LIGHTS LANDING", landingLights);
-        checkSwitch(oldData[1], newData[1], SWITCHKEY_ENGINE_OFF, "ENGINE OFF", boatCENTER);
-        checkSwitch(oldData[1], newData[1], SWITCHKEY_ENGINE_RIGHT, "ENGINE RIGHT", boatAFT);
-        checkSwitch(oldData[1], newData[1], SWITCHKEY_ENGINE_LEFT, "ENGINE LEFT", boatFWD);
-
-        checkSwitch(oldData[2], newData[2], SWITCHKEY_ENGINE_BOTH, "ENGINE BOTH", null);
-        checkSwitch(oldData[2], newData[2], SWITCHKEY_ENGINE_START, "ENGINE START", null);
-        checkSwitch(oldData[2], newData[2], SWITCHKEY_GEAR_UP, "GEAR UP", gearUp);
-        checkSwitch(oldData[2], newData[2], SWITCHKEY_GEAR_DOWN, "GEAR DOWN", gearDown);
+        for (SwitchKeys key: SwitchKeys.values())
+            checkSwitch(oldData[key.getGroup()], newData[key.getGroup()], key.getMask(), key);
     }
 
-    static void checkSwitch(byte oldV, byte newV, int mask, String description, final SwitchCallback callback, String... values)
+    static void checkSwitch(byte oldV, byte newV, int mask, SwitchKeys key)
     {
         if (oldV != newV && flagChanged(oldV, newV, mask))
         {
             final boolean value = flagValue(newV, mask);
             if (DEBUG_SWITCHES)
-            {
-                System.out.println(description + ": " + (value ? (values.length > 0 ? values[0] : "ON") : (values.length > 1 ? values[1] : "OFF")));
-            }
-            if (callback != null && !DEBUG_SWITCHES_DISABLE_SHORTCUTS)
-            {
-                java.awt.EventQueue.invokeLater(new Runnable()
-                {
-                    @Override
-                    public void run()
-                    {
-                        callback.changed(value);
-                    }
-                });
-            }
+                System.out.println(key.getProperty() + ": " + (value ? "ON" : "OFF"));
+            if (!DEBUG_SWITCHES_DISABLE_SHORTCUTS)
+                applyShortcut(key.getProperty(), value);
         }
     }
     
@@ -146,14 +233,8 @@ public class Main
                 {
                     dev.open(1, 0, -1);
                     //Initialize it to: all OFF, gear DOWN & engine OFF
-                    byte[] data = new byte[]
-                    {
-                        0b00000000, 0b00100000, 0b00001000, 0b00000000
-                    };
-                    byte[] oldData = new byte[]
-                    {
-                        0b00000000, 0b00100000, 0b00001000, 0b00000000
-                    };
+                    byte[] data = new byte[]    {0b00000000, 0b00100000, 0b00001000, 0b00000000};
+                    byte[] oldData = new byte[] {0b00000000, 0b00100000, 0b00001000, 0b00000000};
                     while (true)
                     {
                         try
@@ -162,6 +243,7 @@ public class Main
                         }
                         catch (USBTimeoutException e)
                         {
+                            // Just ignore timeouts
                         }
 
                         if (!Arrays.equals(oldData, data) && !firstRun)
@@ -191,9 +273,9 @@ public class Main
                     }
                 }
             }
-            catch (Exception e)
+            catch (USBException | InterruptedException e)
             {
-                e.printStackTrace();
+                throw new RuntimeException(e);
             }
         }
     });
@@ -310,426 +392,6 @@ public class Main
             }
         }
     });
-
-    // SWITCHES KEY BINDINGS
-    // <editor-fold defaultstate="collapsed" desc="boatAFT = ALT+1">
-    static SwitchCallback boatAFT = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_ALT);
-                    robot.keyPress(KeyEvent.VK_1);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_1);
-                    robot.keyRelease(KeyEvent.VK_ALT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="boatCENTER = ALT+2">
-    static SwitchCallback boatCENTER = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_ALT);
-                    robot.keyPress(KeyEvent.VK_2);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_2);
-                    robot.keyRelease(KeyEvent.VK_ALT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="boatFWD = ALT+3">
-    static SwitchCallback boatFWD = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_ALT);
-                    robot.keyPress(KeyEvent.VK_3);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_3);
-                    robot.keyRelease(KeyEvent.VK_ALT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="gunARM = ALT+CTRL+P (ON), SHIFT+CTRL+P (OFF)">
-    static SwitchCallback gunARM = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_ALT);
-                    robot.keyPress(KeyEvent.VK_CONTROL);
-                    robot.keyPress(KeyEvent.VK_P);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_P);
-                    robot.keyRelease(KeyEvent.VK_CONTROL);
-                    robot.keyRelease(KeyEvent.VK_ALT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-            else
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_SHIFT);
-                    robot.keyPress(KeyEvent.VK_CONTROL);
-                    robot.keyPress(KeyEvent.VK_P);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_P);
-                    robot.keyRelease(KeyEvent.VK_CONTROL);
-                    robot.keyRelease(KeyEvent.VK_SHIFT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="anticollisionLights = SHIFT+CTRL+A">
-    static SwitchCallback anticollisionLights = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            try
-            {
-                Robot robot = new Robot();
-                robot.keyPress(KeyEvent.VK_CONTROL);
-                robot.keyPress(KeyEvent.VK_SHIFT);
-                robot.keyPress(KeyEvent.VK_A);
-                Thread.sleep(300);
-                robot.keyRelease(KeyEvent.VK_A);
-                robot.keyRelease(KeyEvent.VK_SHIFT);
-                robot.keyRelease(KeyEvent.VK_CONTROL);
-            }
-            catch (Exception ex)
-            {
-                ex.printStackTrace();
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="taxiLights = SHIFT+CTRL+T (ON), SHIFT+CTRL+O (OFF)">
-    static SwitchCallback taxiLights = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_SHIFT);
-                    robot.keyPress(KeyEvent.VK_CONTROL);
-                    robot.keyPress(KeyEvent.VK_T);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_T);
-                    robot.keyRelease(KeyEvent.VK_CONTROL);
-                    robot.keyRelease(KeyEvent.VK_SHIFT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-            else
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_SHIFT);
-                    robot.keyPress(KeyEvent.VK_CONTROL);
-                    robot.keyPress(KeyEvent.VK_O);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_O);
-                    robot.keyRelease(KeyEvent.VK_CONTROL);
-                    robot.keyRelease(KeyEvent.VK_SHIFT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="landingLights = SHIFT+CTRL+L (ON), SHIFT+CTRL+O (OFF)">
-    static SwitchCallback landingLights = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_SHIFT);
-                    robot.keyPress(KeyEvent.VK_CONTROL);
-                    robot.keyPress(KeyEvent.VK_L);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_L);
-                    robot.keyRelease(KeyEvent.VK_CONTROL);
-                    robot.keyRelease(KeyEvent.VK_SHIFT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-            else
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_SHIFT);
-                    robot.keyPress(KeyEvent.VK_CONTROL);
-                    robot.keyPress(KeyEvent.VK_O);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_O);
-                    robot.keyRelease(KeyEvent.VK_CONTROL);
-                    robot.keyRelease(KeyEvent.VK_SHIFT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="toggleTGP = ALT+T">
-    static SwitchCallback toggleTGP = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            try
-            {
-                Robot robot = new Robot();
-                robot.keyPress(KeyEvent.VK_ALT);
-                robot.keyPress(KeyEvent.VK_T);
-                Thread.sleep(300);
-                robot.keyRelease(KeyEvent.VK_T);
-                robot.keyRelease(KeyEvent.VK_ALT);
-            }
-            catch (Exception ex)
-            {
-                ex.printStackTrace();
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="masterARM = ALT+M (ON), SHIFT+M (OFF)">
-    static SwitchCallback masterARM = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_ALT);
-                    robot.keyPress(KeyEvent.VK_M);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_M);
-                    robot.keyRelease(KeyEvent.VK_ALT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-            else
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_SHIFT);
-                    robot.keyPress(KeyEvent.VK_M);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_M);
-                    robot.keyRelease(KeyEvent.VK_SHIFT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="masterLASE = CTRL+L (ON), SHIFT+L (OFF)">
-    static SwitchCallback masterLASE = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_CONTROL);
-                    robot.keyPress(KeyEvent.VK_L);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_L);
-                    robot.keyRelease(KeyEvent.VK_CONTROL);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-            else
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_SHIFT);
-                    robot.keyPress(KeyEvent.VK_L);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_L);
-                    robot.keyRelease(KeyEvent.VK_SHIFT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="lightsSwitch (pinkie) = CTRL+P (AS PANEL), SHIFT+P (OFF)">
-    static SwitchCallback lightsSwitch = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_CONTROL);
-                    robot.keyPress(KeyEvent.VK_P);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_P);
-                    robot.keyRelease(KeyEvent.VK_CONTROL);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-            else
-            {
-                try
-                {
-                    Robot robot = new Robot();
-                    robot.keyPress(KeyEvent.VK_SHIFT);
-                    robot.keyPress(KeyEvent.VK_P);
-                    Thread.sleep(300);
-                    robot.keyRelease(KeyEvent.VK_P);
-                    robot.keyRelease(KeyEvent.VK_SHIFT);
-                }
-                catch (Exception ex)
-                {
-                    ex.printStackTrace();
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="gearUp = CTRL+G">
-    static SwitchCallback gearUp = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (!value)
-            {
-                return;
-            }
-            try
-            {
-                Robot robot = new Robot();
-                robot.keyPress(KeyEvent.VK_CONTROL);
-                robot.keyPress(KeyEvent.VK_G);
-                Thread.sleep(300);
-                robot.keyRelease(KeyEvent.VK_G);
-                robot.keyRelease(KeyEvent.VK_CONTROL);
-            }
-            catch (Exception ex)
-            {
-                ex.printStackTrace();
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="gearDown = SHIFT+G">
-    static SwitchCallback gearDown = new SwitchCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (!value)
-            {
-                return;
-            }
-            try
-            {
-                Robot robot = new Robot();
-                robot.keyPress(KeyEvent.VK_SHIFT);
-                robot.keyPress(KeyEvent.VK_G);
-                Thread.sleep(300);
-                robot.keyRelease(KeyEvent.VK_G);
-                robot.keyRelease(KeyEvent.VK_SHIFT);
-            }
-            catch (Exception ex)
-            {
-                ex.printStackTrace();
-            }
-        }
-    };// </editor-fold>
 
     // This is how many milliseconds the fake keypress is held when the knob is
     // rotated by one click.
