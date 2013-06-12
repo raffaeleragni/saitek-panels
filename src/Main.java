@@ -19,10 +19,10 @@ public class Main
     private static final int DEVICE_RADIO = 0xd05;
     private static final boolean DEBUG_FLAGS = false;
     private static final boolean DEBUG_SWITCHES = false;
-    private static final boolean DEBUG_RADIO = false;
+    private static final boolean DEBUG_RADIO = true;
     
-    private static final boolean DEBUG_SWITCHES_DISABLE_SHORTCUTS = false;
-    private static final boolean DEBUG_RADIO_DISABLE_SHORTCUTS = false;
+    private static final boolean DEBUG_SWITCHES_DISABLE_SHORTCUTS = true;
+    private static final boolean DEBUG_RADIO_DISABLE_SHORTCUTS = true;
     
     static Properties properties = new Properties();
     static Map<String, Shortcut> shortcuts = new HashMap<>();
@@ -31,7 +31,7 @@ public class Main
     public static void main(String[] args) throws Exception
     {
         robot = new Robot();
-         
+
         System.out.println("CLOSING THIS WINDOW WILL CLOSE THE PROGRAM");
         System.out.println("Starting...");
         
@@ -42,7 +42,18 @@ public class Main
             for (Object o: properties.keySet())
             {
                 String key = o.toString().trim();
-                shortcuts.put(key, new Shortcut(properties.getProperty(key)));
+                switch (key)
+                {
+                    case "SWITCH_KEY_MS":
+                        SWITCH_KEY_MS = Long.parseLong(properties.getProperty(key));
+                        break;
+                    case "KNOB_DELAY_HOLD_MS":
+                        KNOB_DELAY_HOLD_MS = Long.parseLong(properties.getProperty(key));
+                        break;
+                    default:
+                        shortcuts.put(key, new Shortcut(properties.getProperty(key)));
+                        break;
+                }
             }
         }
         System.out.println("Shortcuts read ("+shortcuts.size()+").");
@@ -76,7 +87,7 @@ public class Main
     }
     
     static final Object SHORTCUT_LOCK = new Object();
-    static void applyShortcut(String property, boolean value)
+    static void applyShortcut(String property, boolean value, long ms)
     {
         String key = property + (value ? ".ON" : ".OFF");
         if (shortcuts.containsKey(key))
@@ -89,7 +100,7 @@ public class Main
                     for (int i = 0; i < shortcut.modifiers.length; i++)
                         robot.keyPress(shortcut.modifiers[i]);
                     robot.keyPress(shortcut.keycode);
-                    Thread.sleep(300);
+                    Thread.sleep(ms);
                     robot.keyRelease(shortcut.keycode);
                     for (int i = shortcut.modifiers.length-1; i >= 0; i--)
                         robot.keyRelease(shortcut.modifiers[i]);
@@ -144,6 +155,8 @@ public class Main
     
     // -------------------------------------------------------------------------
     // SWITCH PART
+    
+    private static long SWITCH_KEY_MS = 300;
     
     enum SwitchKeys
     {
@@ -215,7 +228,7 @@ public class Main
             if (DEBUG_SWITCHES)
                 System.out.println(key.getProperty() + ": " + (value ? "ON" : "OFF"));
             if (!DEBUG_SWITCHES_DISABLE_SHORTCUTS)
-                applyShortcut(key.getProperty(), value);
+                applyShortcut(key.getProperty(), value, SWITCH_KEY_MS);
         }
     }
     
@@ -235,7 +248,7 @@ public class Main
                     //Initialize it to: all OFF, gear DOWN & engine OFF
                     byte[] data = new byte[]    {0b00000000, 0b00100000, 0b00001000, 0b00000000};
                     byte[] oldData = new byte[] {0b00000000, 0b00100000, 0b00001000, 0b00000000};
-                    while (true)
+                    while (!Thread.interrupted())
                     {
                         try
                         {
@@ -260,8 +273,6 @@ public class Main
                         }
 
                         firstRun = false;
-
-                        Thread.sleep(10);
                     }
                 }
                 finally
@@ -273,7 +284,7 @@ public class Main
                     }
                 }
             }
-            catch (USBException | InterruptedException e)
+            catch (USBException e)
             {
                 throw new RuntimeException(e);
             }
@@ -283,59 +294,82 @@ public class Main
     // -------------------------------------------------------------------------
     // RADIO PART
     
-    private static final int RADIOKNOB1_SMALL_RIGHT = 0b1;
-    private static final int RADIOKNOB1_SMALL_LEFT = 0b10;
-    private static final int RADIOKNOB1_BIG_RIGHT = 0b100;
-    private static final int RADIOKNOB1_BIG_LEFT = 0b1000;
-    private static final int RADIOKNOB2_SMALL_RIGHT = 0b10000;
-    private static final int RADIOKNOB2_SMALL_LEFT = 0b100000;
-    private static final int RADIOKNOB2_BIG_RIGHT = 0b1000000;
-    private static final int RADIOKNOB2_BIG_LEFT = 0b10000000;
+    private static long KNOB_DELAY_HOLD_MS = 30;
+    
+    enum RadioKeys
+    {
+        KNOB1_SMAPP_RIGHT(2, 0b1, "RADIO_KNOB1_SMALL_RIGHT"),
+        KNOB1_SMAPP_LEFT(2, 0b10, "RADIO_KNOB1_SMALL_LEFT"),
+        KNOB1_BIG_RIGHT(2, 0b100, "RADIO_KNOB1_BIG_RIGHT"),
+        KNOB1_BIG_LEFT(2, 0b10000, "RADIO_KNOB1_BIG_LEFT"),
+        KNOB2_SMAPP_RIGHT(2, 0b10000, "RADIO_KNOB2_SMALL_RIGHT"),
+        KNOB2_SMAPP_LEFT(2, 0b100000, "RADIO_KNOB2_SMALL_LEFT"),
+        KNOB2_BIG_RIGHT(2, 0b1000000, "RADIO_KNOB2_BIG_RIGHT"),
+        KNOB2_BIG_LEFT(2, 0b10000000, "RADIO_KNOB2_BIG_LEFT"),
+        SWITCH1(1, 0b1000000, "RADIO_SWITCH1"),
+        SWITCH2(1, 0b10000000, "RADIO_SWITCH2"),
+        SELECTOR1_COM1(0, 0b1, "RADIO_SELECTOR1_COM1"),
+        SELECTOR1_COM2(0, 0b10, "RADIO_SELECTOR1_COM2"),
+        SELECTOR1_NAV1(0, 0b100, "RADIO_SELECTOR1_NAV1"),
+        SELECTOR1_NAV2(0, 0b1000, "RADIO_SELECTOR1_NAV2"),
+        SELECTOR1_ADF(0, 0b10000, "RADIO_SELECTOR1_ADF"),
+        SELECTOR1_DME(0, 0b100000, "RADIO_SELECTOR1_DME"),
+        SELECTOR1_XPDR(0, 0b1000000, "RADIO_SELECTOR1_XPDR"),
+        SELECTOR2_COM1(0, 0b10000000, "RADIO_SELECTOR2_COM1"),
+        SELECTOR2_COM2(1, 0b1, "RADIO_SELECTOR2_COM2"),
+        SELECTOR2_NAV1(1, 0b10, "RADIO_SELECTOR2_NAV1"),
+        SELECTOR2_NAV2(1, 0b100, "RADIO_SELECTOR2_NAV2"),
+        SELECTOR2_ADF(1, 0b1000, "RADIO_SELECTOR2_ADF"),
+        SELECTOR2_DME(1, 0b10000, "RADIO_SELECTOR2_DME"),
+        SELECTOR2_XPDR(1, 0b100000, "RADIO_SELECTOR2_XPDR");
+        private int group;
+        private int mask;
+        private String property;
+        
+        RadioKeys(int group, int mask, String property)
+        {
+            this.group = group;
+            this.mask = mask;
+            this.property = property;
+        }
+
+        public int getGroup()
+        {
+            return group;
+        }
+
+        public int getMask()
+        {
+            return mask;
+        }
+
+        public String getProperty()
+        {
+            return property;
+        }
+    }
     
     public static void dataChangedRadio(byte[] oldData, byte[] newData)
     {
         if (oldData == null || newData == null || oldData.length != newData.length || Arrays.equals(oldData, newData))
-        {
             return;
-        }
 
-        checkRadio(oldData[2], newData[2], RADIOKNOB1_SMALL_RIGHT, "RADIOKNOB1_SMALL_RIGHT", courseRight);
-        checkRadio(oldData[2], newData[2], RADIOKNOB1_SMALL_LEFT, "RADIOKNOB1_SMALL_LEFT", courseLeft);
-        checkRadio(oldData[2], newData[2], RADIOKNOB1_BIG_RIGHT, "RADIOKNOB1_BIG_RIGHT", headRight);
-        checkRadio(oldData[2], newData[2], RADIOKNOB1_BIG_LEFT, "RADIOKNOB1_BIG_LEFT", headLeft);
-        checkRadio(oldData[2], newData[2], RADIOKNOB2_SMALL_RIGHT, "RADIOKNOB2_SMALL_RIGHT", null);
-        checkRadio(oldData[2], newData[2], RADIOKNOB2_SMALL_LEFT, "RADIOKNOB2_SMALL_LEFT", null);
-        checkRadio(oldData[2], newData[2], RADIOKNOB2_BIG_RIGHT, "RADIOKNOB2_BIG_RIGHT", null);
-        checkRadio(oldData[2], newData[2], RADIOKNOB2_BIG_LEFT, "RADIOKNOB2_BIG_LEFT", null);
+        for (RadioKeys key: RadioKeys.values())
+            checkRadio(oldData[key.getGroup()], newData[key.getGroup()], key.getMask(), key);
     }
 
-    static void checkRadio(byte oldV, byte newV, int mask, String description, final RadioCallback callback, String... values)
+    static void checkRadio(byte oldV, byte newV, int mask, RadioKeys key)
     {
         if (oldV != newV && flagChanged(oldV, newV, mask))
         {
             final boolean value = flagValue(newV, mask);
             if (DEBUG_RADIO)
-            {
-                System.out.println(description + ": " + (value ? (values.length > 0 ? values[0] : "ON") : (values.length > 1 ? values[1] : "OFF")));
-            }
-            if (callback != null && !DEBUG_RADIO_DISABLE_SHORTCUTS)
-            {
-                java.awt.EventQueue.invokeLater(new Runnable()
-                {
-                    @Override
-                    public void run()
-                    {
-                        callback.changed(value);
-                    }
-                });
-            }
+                System.out.println(key.getProperty() + ": " + (value ? "ON" : "OFF"));
+            if (!DEBUG_RADIO_DISABLE_SHORTCUTS)
+                applyShortcut(key.getProperty(), value, KNOB_DELAY_HOLD_MS);
         }
     }
-
-    interface RadioCallback
-    {
-        void changed(boolean value);
-    }
+    
     static Thread radioReader = new Thread(new Runnable()
     {
         @Override
@@ -349,9 +383,10 @@ public class Main
                 {
                     // BEWARE, all radio inputs are always doubled (WTF???)
                     dev.open(1, 0, -1);
-                    byte[] data = new byte[3];
-                    byte[] oldData = new byte[3];
-                    while (true)
+                    // Start with: SELECTOR1 to COM1 and SELECTOR2 to COM1
+                    byte[] data = new byte[]    {(byte)0b10000001, 0b00000000, 0b00000000};
+                    byte[] oldData = new byte[] {(byte)0b10000001, 0b00000000, 0b00000000};
+                    while (!Thread.interrupted())
                     {
                         try
                         {
@@ -373,8 +408,6 @@ public class Main
                             dataChangedRadio(oldData, data);
                             System.arraycopy(data, 0, oldData, 0, data.length);
                         }
-
-                        Thread.sleep(10);
                     }
                 }
                 finally
@@ -386,131 +419,10 @@ public class Main
                     }
                 }
             }
-            catch (Exception e)
+            catch (USBException e)
             {
-                e.printStackTrace();
+                throw new RuntimeException(e);
             }
         }
     });
-
-    // This is how many milliseconds the fake keypress is held when the knob is
-    // rotated by one click.
-    private static final long KNOB_DELAY_HOLD_MS = 30;
-    // RADIO PANEL BINDINGS
-    // <editor-fold defaultstate="collapsed" desc="courseRight = SHIFT+COJNTROL+2">
-    final static RadioCallback courseRight = new RadioCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                synchronized (courseRight)
-                {
-                    try
-                    {
-                        Robot robot = new Robot();
-                        robot.keyPress(KeyEvent.VK_SHIFT);
-                        robot.keyPress(KeyEvent.VK_CONTROL);
-                        robot.keyPress(KeyEvent.VK_2);
-                        Thread.sleep(KNOB_DELAY_HOLD_MS);
-                        robot.keyRelease(KeyEvent.VK_2);
-                        robot.keyRelease(KeyEvent.VK_CONTROL);
-                        robot.keyRelease(KeyEvent.VK_SHIFT);
-                    }
-                    catch (Exception ex)
-                    {
-                        ex.printStackTrace();
-                    }
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="courseLeft = SHIFT+COJNTROL+1">
-    final static RadioCallback courseLeft = new RadioCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                synchronized (courseLeft)
-                {
-                    try
-                    {
-                        Robot robot = new Robot();
-                        robot.keyPress(KeyEvent.VK_SHIFT);
-                        robot.keyPress(KeyEvent.VK_CONTROL);
-                        robot.keyPress(KeyEvent.VK_1);
-                        Thread.sleep(KNOB_DELAY_HOLD_MS);
-                        robot.keyRelease(KeyEvent.VK_1);
-                        robot.keyRelease(KeyEvent.VK_CONTROL);
-                        robot.keyRelease(KeyEvent.VK_SHIFT);
-                    }
-                    catch (Exception ex)
-                    {
-                        ex.printStackTrace();
-                    }
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="headRight = SHIFT+COJNTROL+4">
-    final static RadioCallback headRight = new RadioCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                synchronized (headRight)
-                {
-                    try
-                    {
-                        Robot robot = new Robot();
-                        robot.keyPress(KeyEvent.VK_SHIFT);
-                        robot.keyPress(KeyEvent.VK_CONTROL);
-                        robot.keyPress(KeyEvent.VK_4);
-                        Thread.sleep(KNOB_DELAY_HOLD_MS);
-                        robot.keyRelease(KeyEvent.VK_4);
-                        robot.keyRelease(KeyEvent.VK_CONTROL);
-                        robot.keyRelease(KeyEvent.VK_SHIFT);
-                    }
-                    catch (Exception ex)
-                    {
-                        ex.printStackTrace();
-                    }
-                }
-            }
-        }
-    };// </editor-fold>
-    // <editor-fold defaultstate="collapsed" desc="headLeft = SHIFT+COJNTROL+3">
-    final static RadioCallback headLeft = new RadioCallback()
-    {
-        @Override
-        public void changed(boolean value)
-        {
-            if (value)
-            {
-                synchronized (headLeft)
-                {
-                    try
-                    {
-                        Robot robot = new Robot();
-                        robot.keyPress(KeyEvent.VK_SHIFT);
-                        robot.keyPress(KeyEvent.VK_CONTROL);
-                        robot.keyPress(KeyEvent.VK_3);
-                        Thread.sleep(KNOB_DELAY_HOLD_MS);
-                        robot.keyRelease(KeyEvent.VK_3);
-                        robot.keyRelease(KeyEvent.VK_CONTROL);
-                        robot.keyRelease(KeyEvent.VK_SHIFT);
-                    }
-                    catch (Exception ex)
-                    {
-                        ex.printStackTrace();
-                    }
-                }
-            }
-        }
-    };// </editor-fold>
 }
