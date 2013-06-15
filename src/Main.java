@@ -50,6 +50,9 @@ public class Main
                     case "SWITCH_KEY_MS":
                         SWITCH_KEY_MS = Long.parseLong(properties.getProperty(key));
                         break;
+                    case "RADIOSWITCHES_DELAY_HOLD_MS":
+                        RADIOSWITCHES_DELAY_HOLD_MS = Long.parseLong(properties.getProperty(key));
+                        break;
                     case "KNOB_DELAY_HOLD_MS":
                         KNOB_DELAY_HOLD_MS = Long.parseLong(properties.getProperty(key));
                         break;
@@ -299,6 +302,7 @@ public class Main
     // RADIO PART
     
     private static long KNOB_DELAY_HOLD_MS = 30;
+    private static long RADIOSWITCHES_DELAY_HOLD_MS = 300;
     
     enum RadioKeys
     {
@@ -370,7 +374,27 @@ public class Main
             if (DEBUG_RADIO)
                 System.out.println(key.getProperty() + ": " + (value ? "ON" : "OFF"));
             if (!DEBUG_RADIO_DISABLE_SHORTCUTS)
-                applyShortcut(key.getProperty(), value, KNOB_DELAY_HOLD_MS);
+            {
+                long delay;
+                switch (key)
+                {
+                    default:
+                        delay = RADIOSWITCHES_DELAY_HOLD_MS;
+                        break;
+                    case KNOB1_BIG_LEFT:
+                    case KNOB1_BIG_RIGHT:
+                    case KNOB1_SMAPP_LEFT:
+                    case KNOB1_SMAPP_RIGHT:
+                    case KNOB2_BIG_LEFT:
+                    case KNOB2_BIG_RIGHT:
+                    case KNOB2_SMAPP_LEFT:
+                    case KNOB2_SMAPP_RIGHT:
+                        delay = KNOB_DELAY_HOLD_MS;
+                        break;
+                }
+                
+                applyShortcut(key.getProperty(), value, delay);
+            }
         }
     }
     
