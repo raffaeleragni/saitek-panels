@@ -20,11 +20,11 @@ public class Main
     private static final int DEVICE_AUTOPILOTS = 0x0000;
     private static final boolean DEBUG_FLAGS = false;
     private static final boolean DEBUG_SWITCHES = false;
-    private static final boolean DEBUG_RADIO = true;
-    private static final boolean DEBUG_AUTOPILOTS = true;
+    private static final boolean DEBUG_RADIO = false;
+    private static final boolean DEBUG_AUTOPILOTS = false;
     
-    private static final boolean DEBUG_SWITCHES_DISABLE_SHORTCUTS = true;
-    private static final boolean DEBUG_RADIO_DISABLE_SHORTCUTS = true;
+    private static final boolean DEBUG_SWITCHES_DISABLE_SHORTCUTS = false;
+    private static final boolean DEBUG_RADIO_DISABLE_SHORTCUTS = false;
     private static final boolean DEBUG_AUTOPILOTS_DISABLE_SHORTCUTS = true;
     
     static Properties properties = new Properties();
@@ -64,7 +64,7 @@ public class Main
         
         switchReader.start();
         radioReader.start();
-        autopilotsReader.start();
+//        autopilotsReader.start();
     }
 
     static String toBIN(byte[] b)
@@ -172,7 +172,7 @@ public class Main
         DE_ICE(0, 0b10000, "SWITCHKEY_DE_ICE"),
         PITOT_HEAT(0, 0b100000, "SWITCHKEY_PITOT_HEAT"),
         CLOSE_COWL(0, 0b1000000, "SWITCHKEY_CLOSE_COWL"),
-        LIGHTS_PANEL(0, 0b10000000, "SWITCHKEY_CLOSE_COWL"),
+        LIGHTS_PANEL(0, 0b10000000, "SWITCHKEY_LIGHTS_PANEL"),
         // Group 1
         LIGHTS_BEACON(1, 0b1, "SWITCHKEY_LIGHTS_BEACON"),
         LIGHTS_NAV(1, 0b10, "SWITCHKEY_LIGHTS_NAV"),
