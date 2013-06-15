@@ -17,12 +17,15 @@ public class Main
     private static final int VENDOR_SAITEK = 0x6a3;
     private static final int DEVICE_SWITCH = 0xd67;
     private static final int DEVICE_RADIO = 0xd05;
+    private static final int DEVICE_AUTOPILOTS = 0x0000;
     private static final boolean DEBUG_FLAGS = false;
     private static final boolean DEBUG_SWITCHES = false;
     private static final boolean DEBUG_RADIO = true;
+    private static final boolean DEBUG_AUTOPILOTS = true;
     
     private static final boolean DEBUG_SWITCHES_DISABLE_SHORTCUTS = true;
     private static final boolean DEBUG_RADIO_DISABLE_SHORTCUTS = true;
+    private static final boolean DEBUG_AUTOPILOTS_DISABLE_SHORTCUTS = true;
     
     static Properties properties = new Properties();
     static Map<String, Shortcut> shortcuts = new HashMap<>();
@@ -61,6 +64,7 @@ public class Main
         
         switchReader.start();
         radioReader.start();
+        autopilotsReader.start();
     }
 
     static String toBIN(byte[] b)
@@ -408,6 +412,125 @@ public class Main
                             dataChangedRadio(oldData, data);
                             System.arraycopy(data, 0, oldData, 0, data.length);
                         }
+                    }
+                }
+                finally
+                {
+                    if (dev.isOpen())
+                    {
+                        dev.close();
+                        dev.reset();
+                    }
+                }
+            }
+            catch (USBException e)
+            {
+                throw new RuntimeException(e);
+            }
+        }
+    });
+    
+    
+    // -------------------------------------------------------------------------
+    // AUTOPILOTS PART
+    
+    private static long AUTOPILOTS_KEY_MS = 300;
+    
+    enum AutopilotKeys
+    {
+        // Group 0 (example)
+        EXAMPLE(0, 0b1000, "AUTOPILOT_EXAMPLE");
+        
+        private int group;
+        private int mask;
+        private String property;
+        
+        AutopilotKeys(int group, int mask, String property)
+        {
+            this.group = group;
+            this.mask = mask;
+            this.property = property;
+        }
+        
+        public int getMask()
+        {
+            return mask;
+        }
+        
+        public int getGroup()
+        {
+            return group;
+        }
+        
+        public String getProperty()
+        {
+            return property;
+        }
+    }
+    
+    public static void dataChangedAutopilot(byte[] oldData, byte[] newData)
+    {
+        if (oldData == null || newData == null || oldData.length != newData.length || Arrays.equals(oldData, newData))
+            return;
+
+        for (AutopilotKeys key: AutopilotKeys.values())
+            checkAutopilot(oldData[key.getGroup()], newData[key.getGroup()], key.getMask(), key);
+    }
+
+    static void checkAutopilot(byte oldV, byte newV, int mask, AutopilotKeys key)
+    {
+        if (oldV != newV && flagChanged(oldV, newV, mask))
+        {
+            final boolean value = flagValue(newV, mask);
+            if (DEBUG_AUTOPILOTS)
+                System.out.println(key.getProperty() + ": " + (value ? "ON" : "OFF"));
+            if (!DEBUG_AUTOPILOTS_DISABLE_SHORTCUTS)
+                applyShortcut(key.getProperty(), value, AUTOPILOTS_KEY_MS);
+        }
+    }
+    
+    static Thread autopilotsReader = new Thread(new Runnable()
+    {
+        @Override
+        public void run()
+        {
+            try
+            {
+                System.out.println("starting autopilots panel reader");
+                boolean firstRun = true;
+                Device dev = USB.getDevice((short) VENDOR_SAITEK, (short) DEVICE_AUTOPILOTS);
+                try
+                {
+                    dev.open(1, 0, -1);
+                    //Initialize it to: ???
+                    // TODO: don't even know how many bytes there are to read!!!
+                    byte[] data = new byte[]    {0b00000000, 0b00100000, 0b00001000, 0b00000000};
+                    byte[] oldData = new byte[] {0b00000000, 0b00100000, 0b00001000, 0b00000000};
+                    while (!Thread.interrupted())
+                    {
+                        try
+                        {
+                            dev.readInterrupt(0x81, data, data.length, -1, false);
+                        }
+                        catch (USBTimeoutException e)
+                        {
+                            // Just ignore timeouts
+                        }
+
+                        if (!Arrays.equals(oldData, data) && !firstRun)
+                        {
+                            if (DEBUG_FLAGS)
+                            {
+                                System.out.println("------------------");
+                                System.out.println("AUTOPILOTS OLD: " + toBIN(oldData));
+                                System.out.println("AUTOPILOTS NEW: " + toBIN(data));
+                                System.out.println("------------------");
+                            }
+                            dataChangedAutopilot(oldData, data);
+                            System.arraycopy(data, 0, oldData, 0, data.length);
+                        }
+
+                        firstRun = false;
                     }
                 }
                 finally
