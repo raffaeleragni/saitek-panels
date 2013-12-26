@@ -42,7 +42,7 @@ public class Main
     private static final boolean DEBUG_AUTOPILOTS = false;
     
     private static final boolean DEBUG_SWITCHES_DISABLE_SHORTCUTS = false;
-    private static final boolean DEBUG_RADIO_DISABLE_SHORTCUTS = false;
+    private static final boolean DEBUG_RADIO_DISABLE_SHORTCUTS = true;
     private static final boolean DEBUG_AUTOPILOTS_DISABLE_SHORTCUTS = true;
     
     static Properties properties = new Properties();
@@ -84,7 +84,7 @@ public class Main
         System.out.println();
         
         switchReader.start();
-        radioReader.start();
+//        radioReader.start();
 //        autopilotsReader.start();
     }
 
@@ -122,8 +122,8 @@ public class Main
             {
                 try
                 {
-                    for (int i = 0; i < shortcut.modifiers.length; i++)
-                        robot.keyPress(shortcut.modifiers[i]);
+                    for (Integer modifier : shortcut.modifiers)
+                        robot.keyPress(modifier);
                     robot.keyPress(shortcut.keycode);
                     Thread.sleep(ms);
                     robot.keyRelease(shortcut.keycode);
@@ -277,27 +277,27 @@ public class Main
                     {
                         try
                         {
-                            dev.readInterrupt(0x81, data, data.length, -1, false);
-                        }
-                        catch (USBTimeoutException e)
-                        {
-                            // Just ignore timeouts
-                        }
+                            dev.readInterrupt(0x81, data, data.length, 1000, false);
 
-                        if (!Arrays.equals(oldData, data) && !firstRun)
-                        {
-                            if (DEBUG_FLAGS)
+                            if (!Arrays.equals(oldData, data) && !firstRun)
                             {
-                                System.out.println("------------------");
-                                System.out.println("SWITCH OLD: " + toBIN(oldData));
-                                System.out.println("SWITCH NEW: " + toBIN(data));
-                                System.out.println("------------------");
+                                if (DEBUG_FLAGS)
+                                {
+                                    System.out.println("------------------");
+                                    System.out.println("SWITCH OLD: " + toBIN(oldData));
+                                    System.out.println("SWITCH NEW: " + toBIN(data));
+                                    System.out.println("------------------");
+                                }
+                                dataChangedSwitches(oldData, data);
+                                System.arraycopy(data, 0, oldData, 0, data.length);
                             }
-                            dataChangedSwitches(oldData, data);
-                            System.arraycopy(data, 0, oldData, 0, data.length);
-                        }
 
-                        firstRun = false;
+                            firstRun = false;
+                            }
+                            catch (USBTimeoutException e)
+                            {
+                                // Just ignore timeouts
+                            }
                     }
                 }
                 finally
