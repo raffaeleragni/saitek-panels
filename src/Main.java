@@ -37,7 +37,7 @@ public class Main
     private static final int DEVICE_RADIO = 0xd05;
     private static final int DEVICE_AUTOPILOTS = 0x0000;
     private static final boolean DEBUG_FLAGS = false;
-    private static final boolean DEBUG_SWITCHES = false;
+    private static final boolean DEBUG_SWITCHES = true;
     private static final boolean DEBUG_RADIO = false;
     private static final boolean DEBUG_AUTOPILOTS = false;
     
