@@ -112,29 +112,41 @@ public class Main
     }
     
     static final Object SHORTCUT_LOCK = new Object();
-    static void applyShortcut(String property, boolean value, long ms)
+    static void applyShortcut(final String property, final boolean value, final long ms)
     {
-        String key = property + (value ? ".ON" : ".OFF");
-        if (shortcuts.containsKey(key))
+        // Use a thread here.
+        // this is because each reading from the joystick can continue and add up shortcuts
+        // (albeit they would still need to be synchronized or the shift keys could overlap)
+        // to the chain of execution, without preventing further reads while the keys are
+        // being emulated (key emulation has a delay od down/up).
+        new Thread(new Runnable()
         {
-            Shortcut shortcut = shortcuts.get(key);
-            synchronized(SHORTCUT_LOCK)
+            @Override
+            public void run()
             {
-                try
+                String key = property + (value ? ".ON" : ".OFF");
+                if (shortcuts.containsKey(key))
                 {
-                    for (Integer modifier : shortcut.modifiers)
-                        robot.keyPress(modifier);
-                    robot.keyPress(shortcut.keycode);
-                    Thread.sleep(ms);
-                    robot.keyRelease(shortcut.keycode);
-                    for (int i = shortcut.modifiers.length-1; i >= 0; i--)
-                        robot.keyRelease(shortcut.modifiers[i]);
-                }
-                catch (InterruptedException e)
-                {
+                    Shortcut shortcut = shortcuts.get(key);
+                    synchronized(SHORTCUT_LOCK)
+                    {
+                        try
+                        {
+                            for (Integer modifier : shortcut.modifiers)
+                                robot.keyPress(modifier);
+                            robot.keyPress(shortcut.keycode);
+                            Thread.sleep(ms);
+                            robot.keyRelease(shortcut.keycode);
+                            for (int i = shortcut.modifiers.length-1; i >= 0; i--)
+                                robot.keyRelease(shortcut.modifiers[i]);
+                        }
+                        catch (InterruptedException e)
+                        {
+                        }
+                    }
                 }
             }
-        }
+        }).start();
     }
     
     /**
@@ -277,7 +289,7 @@ public class Main
                     {
                         try
                         {
-                            dev.readInterrupt(0x81, data, data.length, 1000, false);
+                            dev.readInterrupt(0x81, data, data.length, 50_000, false);
 
                             if (!Arrays.equals(oldData, data) && !firstRun)
                             {
@@ -293,11 +305,11 @@ public class Main
                             }
 
                             firstRun = false;
-                            }
-                            catch (USBTimeoutException e)
-                            {
-                                // Just ignore timeouts
-                            }
+                        }
+                        catch (USBTimeoutException e)
+                        {
+                            // Just ignore timeouts
+                        }
                     }
                 }
                 finally
