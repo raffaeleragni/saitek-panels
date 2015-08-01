@@ -128,23 +128,26 @@ public class Main
                 if (shortcuts.containsKey(key))
                 {
                     Shortcut shortcut = shortcuts.get(key);
-                    synchronized(SHORTCUT_LOCK)
+                    try
                     {
-                        try
+                        synchronized(SHORTCUT_LOCK)
                         {
                             for (Integer modifier : shortcut.modifiers)
                                 robot.keyPress(modifier);
                             robot.keyPress(shortcut.keycode);
-                            Thread.sleep(ms);
+                        }
+                        Thread.sleep(ms);
+                        synchronized(SHORTCUT_LOCK)
+                        {
                             robot.keyRelease(shortcut.keycode);
                             for (int i = shortcut.modifiers.length-1; i >= 0; i--)
                                 robot.keyRelease(shortcut.modifiers[i]);
                         }
-                        catch (InterruptedException e)
-                        {
-                        }
                     }
-                }
+                    catch (InterruptedException e)
+                    {
+                    }
+            }
             }
         }).start();
     }
@@ -221,9 +224,9 @@ public class Main
         GEAR_UP(2, 0b100, "SWITCHKEY_GEAR_UP"),
         GEAR_DOWN(2, 0b1000, "SWITCHKEY_GEAR_DOWN");
         
-        private int group;
-        private int mask;
-        private String property;
+        private final int group;
+        private final int mask;
+        private final String property;
         
         SwitchKeys(int group, int mask, String property)
         {
@@ -289,7 +292,7 @@ public class Main
                     {
                         try
                         {
-                            dev.readInterrupt(0x81, data, data.length, 50_000, false);
+                            dev.readInterrupt(0x81, data, data.length, -1, false);
 
                             if (!Arrays.equals(oldData, data) && !firstRun)
                             {
@@ -360,9 +363,9 @@ public class Main
         SELECTOR2_ADF(1, 0b1000, "RADIO_SELECTOR2_ADF"),
         SELECTOR2_DME(1, 0b10000, "RADIO_SELECTOR2_DME"),
         SELECTOR2_XPDR(1, 0b100000, "RADIO_SELECTOR2_XPDR");
-        private int group;
-        private int mask;
-        private String property;
+        private final int group;
+        private final int mask;
+        private final String property;
         
         RadioKeys(int group, int mask, String property)
         {
@@ -488,16 +491,16 @@ public class Main
     // -------------------------------------------------------------------------
     // AUTOPILOTS PART
     
-    private static long AUTOPILOTS_KEY_MS = 300;
+    private static final long AUTOPILOTS_KEY_MS = 300;
     
     enum AutopilotKeys
     {
         // Group 0 (example)
         EXAMPLE(0, 0b1000, "AUTOPILOT_EXAMPLE");
         
-        private int group;
-        private int mask;
-        private String property;
+        private final int group;
+        private final int mask;
+        private final String property;
         
         AutopilotKeys(int group, int mask, String property)
         {
