@@ -294,8 +294,10 @@ public final class Main
             {
                 dev.open(1, 0, -1);
                 //Initialize it to: all OFF, gear DOWN & engine OFF
-                byte[] data = SWITCH_INITIAL_BYTES;
-                byte[] oldData = SWITCH_INITIAL_BYTES;
+                byte[] data = new byte[SWITCH_INITIAL_BYTES.length];
+                byte[] oldData = new byte[SWITCH_INITIAL_BYTES.length];
+                System.arraycopy(SWITCH_INITIAL_BYTES, 0, data, 0, SWITCH_INITIAL_BYTES.length);
+                System.arraycopy(SWITCH_INITIAL_BYTES, 0, oldData, 0, SWITCH_INITIAL_BYTES.length);
                 while (!Thread.interrupted())
                 {
                     try
@@ -448,8 +450,10 @@ public final class Main
             {
                 // BEWARE, all radio inputs are always doubled (WTF???)
                 dev.open(1, 0, -1);
-                byte[] data = RADIO_INITIAL_BYTES;
-                byte[] oldData = RADIO_INITIAL_BYTES;
+                byte[] data = new byte[SWITCH_INITIAL_BYTES.length];
+                byte[] oldData = new byte[SWITCH_INITIAL_BYTES.length];
+                System.arraycopy(RADIO_INITIAL_BYTES, 0, data, 0, SWITCH_INITIAL_BYTES.length);
+                System.arraycopy(RADIO_INITIAL_BYTES, 0, oldData, 0, SWITCH_INITIAL_BYTES.length);
                 while (!Thread.interrupted())
                 {
                     try
@@ -560,8 +564,10 @@ public final class Main
             try
             {
                 dev.open(1, 0, -1);
-                byte[] data = AUTOPILOTS_INITIAL_BYTES;
-                byte[] oldData = AUTOPILOTS_INITIAL_BYTES;
+                byte[] data = new byte[SWITCH_INITIAL_BYTES.length];
+                byte[] oldData = new byte[SWITCH_INITIAL_BYTES.length];
+                System.arraycopy(AUTOPILOTS_INITIAL_BYTES, 0, data, 0, SWITCH_INITIAL_BYTES.length);
+                System.arraycopy(AUTOPILOTS_INITIAL_BYTES, 0, oldData, 0, SWITCH_INITIAL_BYTES.length);
                 while (!Thread.interrupted())
                 {
                     try
