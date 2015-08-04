@@ -1,0 +1,39 @@
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'application'
+apply plugin: 'distribution'
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+mainClassName = 'Main'
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src'
+        }
+    }
+}
+repositories {
+    mavenCentral()
+    mavenLocal()
+}
+
+dependencies {
+    compile 'ch-usb:ch-usb:0.5.9'
+    compile 'net.java.dev.jna:jna:4.1.0'
+    compile 'net.java.dev.jna:platform:3.5.2'
+}
+
+distributions {
+    main {
+        
+        contents {
+            from { 'keys.properties' }
+            from { 'LibusbJava.dll' }
+            from { 'libusb0.dll' }
+            from { 'to_install.zip' }
+        }
+    }
+}
