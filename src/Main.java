@@ -20,6 +20,7 @@ import ch.ntb.usb.Device;
 import ch.ntb.usb.USB;
 import ch.ntb.usb.USBException;
 import ch.ntb.usb.USBTimeoutException;
+import java.awt.AWTException;
 import java.awt.Robot;
 import java.awt.event.KeyEvent;
 import java.io.FileInputStream;
@@ -52,7 +53,6 @@ public final class Main
 
     private static final Properties PROPERTIES = new Properties();
     private static final Map<String, Shortcut> SHORTCUTS = new HashMap<>();
-    private static Robot robot;
 
     private static final long SWITCH_KEYS_MS_DEFAULT = 300;
     private static final long KNOB_DELAY_HOLD_MS_DEFAULT = 300;
@@ -64,8 +64,6 @@ public final class Main
 
     public static void main(final String[] args) throws Exception
     {
-        robot = new Robot();
-
         System.out.println("CLOSING THIS WINDOW WILL CLOSE THE PROGRAM");
         System.out.println("Starting...");
 
@@ -126,41 +124,11 @@ public final class Main
         return (v & mask) > 0;
     }
 
-    static final Object SHORTCUT_LOCK = new Object();
     static void applyShortcut(final String property, final boolean value, final long ms)
     {
-        // Use a thread here.
-        // this is because each reading from the joystick can continue and add up shortcuts
-        // (albeit they would still need to be synchronized or the shift keys could overlap)
-        // to the chain of execution, without preventing further reads while the keys are
-        // being emulated (key emulation has a delay od down/up).
-        new Thread(() ->
-        {
-            String key = property + (value ? ".ON" : ".OFF");
-            if (SHORTCUTS.containsKey(key))
-            {
-                Shortcut shortcut = SHORTCUTS.get(key);
-                try
-                {
-                    synchronized (SHORTCUT_LOCK)
-                    {
-                        for (Integer modifier : shortcut.modifiers)
-                            robot.keyPress(modifier);
-                        robot.keyPress(shortcut.keycode);
-                    }
-                    Thread.sleep(ms);
-                    synchronized (SHORTCUT_LOCK)
-                    {
-                        robot.keyRelease(shortcut.keycode);
-                        for (int i = shortcut.modifiers.length - 1; i >= 0; i--)
-                            robot.keyRelease(shortcut.modifiers[i]);
-                    }
-                }
-                catch (InterruptedException e)
-                {
-                }
-            }
-        }).start();
+        String key = property + (value ? ".ON" : ".OFF");
+        if (SHORTCUTS.containsKey(key))
+            SHORTCUTS.get(key).run();
     }
 
     /**
@@ -168,6 +136,22 @@ public final class Main
      */
     static class Shortcut
     {
+        static final Object SHORTCUT_LOCK = new Object();
+        private static final Robot ROBOT;
+        static
+        {
+            try
+            {
+                ROBOT = new Robot();
+            }
+            catch (AWTException ex)
+            {
+                // Can't work without robots.
+                System.exit(0);
+                throw new RuntimeException(ex);
+            }
+        }
+
         private Integer[] modifiers;
         private int keycode;
 
@@ -201,6 +185,28 @@ public final class Main
 
             keycode = code;
             modifiers = mods.toArray(new Integer[mods.size()]);
+        }
+
+        public void run()
+        {
+            // Use a thread here.
+            // this is because each reading from the joystick can continue and add up shortcuts
+            // (albeit they would still need to be synchronized or the shift keys could overlap)
+            // to the chain of execution, without preventing further reads while the keys are
+            // being emulated (key emulation has a delay od down/up).
+            new Thread(() ->
+            {
+                synchronized (SHORTCUT_LOCK)
+                {
+                    for (Integer modifier : modifiers)
+                        ROBOT.keyPress(modifier);
+                    ROBOT.keyPress(keycode);
+
+                    ROBOT.keyRelease(keycode);
+                    for (int i = modifiers.length - 1; i >= 0; i--)
+                        ROBOT.keyRelease(modifiers[i]);
+                }
+            }).start();
         }
     }
 
